@@ -1,4 +1,4 @@
-Converge Core
+## Converge Core
 A cloud-native 5G Standalone (SA) core deployment exploring RAN-core convergence, built on **free5GC** and **UERANSIM**. This project simulates IoT device fleet connectivity, a custom network-exposure API layer, multi-operator/roaming concepts, and device-level isolation: patterns that are relevant to API-first, cloud-native mobile core providers.
 
 > **Status:** Work in progress (Day 1 of 10 complete). This README will be updated as the project develops.

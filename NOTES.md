@@ -28,3 +28,43 @@
 - WebConsole reachable via SSH tunnel (port 5000 kept off the public
   interface deliberately — ufw was inactive on the droplet, so tunneling
   avoids exposing the console to the internet)
+
+# Day 2 — RAN Simulation & End-to-End Data Plane
+
+## Issue: registration/PDU session succeeded, but no data-plane traffic
+- UE registration and PDU session establishment both succeeded (NAS Registration
+  Accept, PDU Session Establishment Accept), TUN interface `uesimtun0` came up
+  with a valid IP.
+- However, pinging through the tunnel showed 100% packet loss.
+
+## Investigation
+- Ruled out UPF-to-internet reachability separately (confirmed NAT/masquerade
+  rule existed, ip_forward enabled).
+- tcpdump on the host revealed ICMP requests reached 8.8.8.8 and replies came
+  back to the UPF's data-network interface — but were never re-encapsulated
+  into GTP-U and sent back toward the UE. Confirmed by climbing TX error
+  counters on the UPF's `upfgtp` interface.
+- Investigated NIC checksum/segmentation offload as a possible cause (a
+  documented pattern for this exact symptom on cloud VMs) — disabled
+  toggleable offload features on the host interface; did not resolve it.
+
+## Root cause
+- The deployment was pinned to an older combination: free5gc-compose v3.4.0's
+  docker-compose.yaml referenced UPF image v3.3.0, paired with gtp5g v0.8.10
+  (chosen to satisfy that UPF's version-range check). This older UPF/gtp5g
+  pairing appears to have a genuine return-path GTP-U encapsulation bug,
+  separate from and easily mistaken for a checksum-offload issue.
+
+## Fix
+- Upgraded to free5gc-compose v3.4.5, which pulls a newer, rewritten
+  "Go-UPF" (free5gc/upf:v3.4.5) expecting gtp5g v0.9.5 specifically
+  (per the project's current documented requirement).
+- Rebuilt gtp5g at v0.9.5, reloaded the kernel module, redeployed the stack.
+- Also hit and resolved a corrupted MongoDB volume (WiredTiger error) from
+  repeated version switches — resolved by removing the named `dbdata` volume
+  and letting it reinitialize.
+
+## Result
+- Full end-to-end connectivity confirmed: UE registers, establishes a PDU
+  session, and passes real ICMP traffic through the tunnel to the public
+  internet with 0% packet loss (~1.5-5ms RTT from the droplet).
